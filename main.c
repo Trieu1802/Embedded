@@ -10,6 +10,8 @@
 
 #define M_PI 															(3.14159265358979323846)
 
+#define I2C_SPD				(100000U)
+
 #define STATE_STANDBY														(0)
 #define STATE_ACTIVE														(1)
 
@@ -29,70 +31,54 @@
 #define SW1_PIN                (1<<3)
 #define SW2_PIN                (1<<12)
 
+#define PORTC_D_IRQ_NBR (IRQn_Type) 31
+
 #define GREEN_LED_TICKS_TO_CHANGE	(500U)
 #define RED_LED_TICKS_TO_CHANGE	(250U)
 
 void init_i2c(void);
 void send_i2c(uint8_t device_addr, uint8_t reg_addr, uint8_t value);
 void read_i2c(uint8_t device_addr, uint8_t reg_addr, uint8_t *rxBuff, uint32_t rxSize);
-uint16_t mag_calculator(int16_t x_raw, int16_t y_raw);
+void init_mag();
 void PORTC_PORTD_IRQHandler(void);
 void SysTick_Handler (void);
 void Delay (uint32_t TICK);
 void init_SysTick_interrupt();
 void ledBlink ();
 void init_GPIO ();
+void PORTC_PORTD_IRQHandler();
+uint16_t mag_calculator();
 
 int32_t volatile msTicks = 0;
 int32_t volatile redTicks = 0;
 int32_t volatile greenTicks = 0;
 bool state = STATE_ACTIVE;
+uint8_t rx_buff[MAG_OUT_DATA_LENGTH];
 
 int main(void)
 {
 	init_i2c();
-	send_i2c(MAG_I2C_ADDR, MAG_CTRL_REG1, MAG_CTRL_REG1_STANDBY_MODE);
-	send_i2c(MAG_I2C_ADDR, MAG_CTRL_REG2, MAG_CTRL_REG2_AUTO_RESET_MODE);
-	send_i2c(MAG_I2C_ADDR, MAG_CTRL_REG1, MAG_CTRL_REG1_ACTIVE_MODE);
-
 	init_GPIO();
 	init_SysTick_interrupt();
-
 	LCD_Init();
-	uint8_t rx_buff[6];
+	init_mag();
+
 	while (1)
 	{
 		ledBlink();
-		if ((PTC->PDIR & SW2_PIN) == 0)
-		{
-			state = STATE_ACTIVE;
-			while ((PTC->PDIR & SW1_PIN) == 0);
-
-		}
-		if ((PTC->PDIR & SW1_PIN) == 0)
-		{
-			state = !state;
-			while ((PTC->PDIR & SW1_PIN) == 0);
-
-		}
 		if (state == STATE_STANDBY) continue;
-		
-		read_i2c(MAG_I2C_ADDR, MAG_OUT_REG_START, rx_buff, MAG_OUT_DATA_LENGTH);
-		
-		int16_t x_raw = (int16_t) ((((uint16_t) rx_buff[0]) << 8U)| rx_buff[1]);
-		int16_t y_raw = (int16_t) ((((uint16_t) rx_buff[2]) << 8U)| rx_buff[3]);
-
-		double angle = ((double)(atan2(y_raw, x_raw)))*180/M_PI;
-		if (angle < 0) {
-			angle += 360.0;
-  	}
-		LCD_DisplayDemical((uint16_t) angle);
+		uint16_t angle = mag_calculator();
+		LCD_DisplayDemical(angle);
 		Delay(10);
 	}
 }
 
-uint16_t mag_calculator(int16_t x_raw, int16_t y_raw)
+uint16_t mag_calculator()
 {
+	read_i2c(MAG_I2C_ADDR, MAG_OUT_REG_START, rx_buff, MAG_OUT_DATA_LENGTH);
+		
+	int16_t x_raw = (int16_t) ((((uint16_t) rx_buff[0]) << 8U)| rx_buff[1]);
+	int16_t y_raw = (int16_t) ((((uint16_t) rx_buff[2]) << 8U)| rx_buff[3]);
 	double_t angle = ((double_t)(atan2(y_raw, x_raw)))*180/M_PI;
 	if (angle < 0) {
 		angle += 360.0;
@@ -100,18 +86,23 @@ uint16_t mag_calculator(int16_t x_raw, int16_t y_raw)
 	return (uint16_t) angle;
 }
 
+void init_mag()
+{
+	send_i2c(MAG_I2C_ADDR, MAG_CTRL_REG1, MAG_CTRL_REG1_STANDBY_MODE);
+	send_i2c(MAG_I2C_ADDR, MAG_CTRL_REG2, MAG_CTRL_REG2_AUTO_RESET_MODE);
+	send_i2c(MAG_I2C_ADDR, MAG_CTRL_REG1, MAG_CTRL_REG1_ACTIVE_MODE);
+}
 
 void init_i2c()
 {
-	i2c_master_config_t masterConfig;
+	i2c_master_config_t m_config;
 	BOARD_InitPins();
 	BOARD_BootClockRUN();
 	BOARD_InitDebugConsole();
 	BOARD_I2C_ConfigurePins();
 
-	I2C_MasterGetDefaultConfig(&masterConfig);
-	masterConfig.baudRate_Bps = 100000U;
-	I2C_MasterInit(I2C0, &masterConfig, CLOCK_GetFreq(I2C0_CLK_SRC));
+	I2C_MasterGetDefaultConfig(&m_config);
+	I2C_MasterInit(I2C0, &m_config, CLOCK_GetFreq(I2C0_CLK_SRC));
 }
 
 void send_i2c(uint8_t device_addr, uint8_t reg_addr, uint8_t value)
@@ -155,6 +146,10 @@ void init_GPIO()
 	PORTC->PCR[3]= PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;; /* make PTC3 pin as GPIO and enable pull-up resistor */
 	PORTC->PCR[12]= PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;; /* make PTC12 pin as GPIO and enable pull-up resistor */
 	
+	PORTC->PCR[3] |= PORT_PCR_IRQC(0x0A);
+	PORTC->PCR[12] |= PORT_PCR_IRQC(0x0A);
+	NVIC_ClearPendingIRQ(PORTC_D_IRQ_NBR);
+	NVIC_EnableIRQ(PORTC_D_IRQ_NBR);
 	PTD->PDDR |= GREEN_LED_PIN; /* make PTD5 as output pin */
 	PTE->PDDR |= RED_LED_PIN; /* make PTE29 as output pin */
 	
@@ -198,7 +193,23 @@ void ledBlink ()
 		}
 	}
 }
-	
+
+void PORTC_PORTD_IRQHandler()
+{
+	if ((PTC->PDIR & SW2_PIN) == 0)
+	{
+		while ((PTC->PDIR & SW2_PIN) == 0);
+		state = STATE_ACTIVE;
+		PORTC->PCR[12] |= PORT_PCR_ISF_MASK;
+	}
+	if ((PTC->PDIR & SW1_PIN) == 0)
+	{
+		while ((PTC->PDIR & SW1_PIN) == 0);
+		state = !state;
+		PORTC->PCR[3] |= PORT_PCR_ISF_MASK;
+	}
+}
+
 void Delay (uint32_t TICK)
 {
 	while (msTicks < TICK);
