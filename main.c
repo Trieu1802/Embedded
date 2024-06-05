@@ -143,6 +143,7 @@ void init_GPIO()
 	
 	PORTD->PCR[5] = PORT_PCR_MUX(1); /* make PTD5 pin as GPIO */
 	PORTE->PCR[29] = PORT_PCR_MUX(1); /* make PTE29 pin as GPIO */
+	
 	PORTC->PCR[3]= PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;; /* make PTC3 pin as GPIO and enable pull-up resistor */
 	PORTC->PCR[12]= PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;; /* make PTC12 pin as GPIO and enable pull-up resistor */
 	
@@ -150,11 +151,11 @@ void init_GPIO()
 	PORTC->PCR[12] |= PORT_PCR_IRQC(0x0A);
 	NVIC_ClearPendingIRQ(PORTC_D_IRQ_NBR);
 	NVIC_EnableIRQ(PORTC_D_IRQ_NBR);
+	
 	PTD->PDDR |= GREEN_LED_PIN; /* make PTD5 as output pin */
 	PTE->PDDR |= RED_LED_PIN; /* make PTE29 as output pin */
-	
+
 	PTE->PSOR |= RED_LED_PIN; /* make RED LED off */
-	FPTC->PDDR &= ~SW1_PIN; /* make PTA1 as input pin */
 }	
 
 void init_SysTick_interrupt()
