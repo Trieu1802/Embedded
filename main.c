@@ -10,8 +10,6 @@
 
 #define M_PI 															(3.14159265358979323846)
 
-#define I2C_SPD				(100000U)
-
 #define STATE_STANDBY														(0)
 #define STATE_ACTIVE														(1)
 
@@ -147,15 +145,13 @@ void init_GPIO()
 	PORTC->PCR[3]= PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;; /* make PTC3 pin as GPIO and enable pull-up resistor */
 	PORTC->PCR[12]= PORT_PCR_MUX(1) | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;; /* make PTC12 pin as GPIO and enable pull-up resistor */
 	
-	PORTC->PCR[3] |= PORT_PCR_IRQC(0x0A);
-	PORTC->PCR[12] |= PORT_PCR_IRQC(0x0A);
-	NVIC_ClearPendingIRQ(PORTC_D_IRQ_NBR);
-	NVIC_EnableIRQ(PORTC_D_IRQ_NBR);
+	PORTC->PCR[3] |= PORT_PCR_IRQC(0x0A);/* thiet lap ngat suon xuong cho pin PORTC3 */
+	PORTC->PCR[12] |= PORT_PCR_IRQC(0x0A);/* thiet lap ngat suon xuong cho pin PORTC12 */
+	NVIC_ClearPendingIRQ(PORTC_D_IRQ_NBR);/* xoa cac interrupt request dang ton tai o port C va D */
+	NVIC_EnableIRQ(PORTC_D_IRQ_NBR);/* enable interrupt request cho port C va D */
 	
 	PTD->PDDR |= GREEN_LED_PIN; /* make PTD5 as output pin */
 	PTE->PDDR |= RED_LED_PIN; /* make PTE29 as output pin */
-
-	PTE->PSOR |= RED_LED_PIN; /* make RED LED off */
 }	
 
 void init_SysTick_interrupt()
